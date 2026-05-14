@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thread Stack Memory Layout</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #e0e0e0;
+            padding: 40px 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: #ffffff;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #b0b0b0;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .note {
+            text-align: center;
+            color: #888;
+            margin-bottom: 40px;
+            font-size: 0.9em;
+            font-style: italic;
+        }
+
+        .stack-container {
+            display: flex;
+            gap: 40px;
+            align-items: flex-start;
+        }
+
+        .stack-wrapper {
+            flex: 1;
+            position: relative;
+        }
+
+        .memory-label {
+            font-size: 0.9em;
+            color: #888;
+            margin-bottom: 10px;
+            text-align: right;
+        }
+
+        .stack {
+            border: 3px solid #4a5568;
+            border-radius: 12px;
+            padding: 20px;
+            background: rgba(26, 32, 44, 0.6);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        .stack-frame {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            border: 2px solid #4a5568;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 12px;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .stack-frame:hover {
+            transform: translateX(-5px);
+            box-shadow: 0 4px 20px rgba(100, 150, 255, 0.3);
+            border-color: #6096ff;
+        }
+
+        .frame-title {
+            font-size: 1.3em;
+            font-weight: 600;
+            color: #ffffff;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .frame-badge {
+            background: #e74c3c;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.7em;
+            text-transform: uppercase;
+        }
+
+        .frame-content {
+            color: #cbd5e0;
+            line-height: 1.8;
+            font-size: 0.95em;
+        }
+
+        .frame-content li {
+            list-style: none;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .frame-content li:before {
+            content: "▸";
+            position: absolute;
+            left: 0;
+            color: #60a5fa;
+        }
+
+        .return-address {
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            border: 2px solid #475569;
+            border-radius: 6px;
+            padding: 12px 20px;
+            margin-bottom: 12px;
+            text-align: center;
+            color: #94a3b8;
+            font-size: 0.9em;
+            font-family: 'Courier New', monospace;
+        }
+
+        .pointer-indicator {
+            position: absolute;
+            left: -60px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .pointer-label {
+            font-weight: 600;
+            font-size: 0.9em;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        .rsp-pointer {
+            color: #ef4444;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid #ef4444;
+        }
+
+        .rbp-pointer {
+            color: #10b981;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid #10b981;
+        }
+
+        .arrow {
+            color: inherit;
+            font-size: 1.2em;
+        }
+
+        .growth-indicator {
+            text-align: center;
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(245, 158, 66, 0.1);
+            border: 2px dashed #f59e42;
+            border-radius: 8px;
+            color: #f59e42;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .growth-arrow {
+            font-size: 2em;
+            animation: bounce 2s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(10px); }
+        }
+
+        .info-panel {
+            flex: 0 0 300px;
+            background: rgba(26, 32, 44, 0.6);
+            backdrop-filter: blur(10px);
+            border: 2px solid #4a5568;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        .info-title {
+            font-size: 1.3em;
+            font-weight: 600;
+            color: #ffffff;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #4a5568;
+            padding-bottom: 10px;
+        }
+
+        .info-section {
+            margin-bottom: 20px;
+        }
+
+        .info-section h3 {
+            color: #60a5fa;
+            font-size: 1em;
+            margin-bottom: 8px;
+        }
+
+        .info-section p {
+            color: #cbd5e0;
+            font-size: 0.9em;
+            line-height: 1.6;
+        }
+
+        .call-sequence {
+            background: rgba(96, 165, 250, 0.1);
+            border-left: 3px solid #60a5fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 20px;
+        }
+
+        .call-sequence-title {
+            color: #60a5fa;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .call-chain {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .call-step {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #cbd5e0;
+            font-size: 0.9em;
+        }
+
+        .call-step-arrow {
+            color: #60a5fa;
+        }
+
+        .legend {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(71, 85, 105, 0.2);
+            border-radius: 8px;
+        }
+
+        .legend-title {
+            color: #94a3b8;
+            font-size: 0.85em;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+            font-size: 0.85em;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+        }
+
+        @media (max-width: 768px) {
+            .stack-container {
+                flex-direction: column;
+            }
+
+            .info-panel {
+                flex: 1;
+                width: 100%;
+            }
+
+            .pointer-indicator {
+                position: static;
+                margin-bottom: 10px;
+                justify-content: flex-end;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Thread Stack Memory Layout</h1>
+        <p class="subtitle">Approximately 8MB per thread</p>
+        <p class="note">(This shows the stack for a single thread)</p>
+
+        <div class="stack-container">
+            <div class="stack-wrapper">
+                <div class="memory-label">← High Memory Addresses</div>
+                
+                <div class="stack">
+                    <!-- Function A Frame -->
+                    <div class="stack-frame">
+                        <div class="frame-title">
+                            Stack Frame for func A
+                            <span class="frame-badge">Caller</span>
+                        </div>
+                        <ul class="frame-content">
+                            <li>Local variables</li>
+                            <li>Saved registers</li>
+                            <li>Saved RBP (points to previous frame)</li>
+                        </ul>
+                    </div>
+
+                    <!-- Return Address A -->
+                    <div class="return-address">
+                        Return address to caller of A
+                    </div>
+
+                    <!-- Function B Frame -->
+                    <div class="stack-frame">
+                        <div class="frame-title">
+                            Stack Frame for func B
+                        </div>
+                        <ul class="frame-content">
+                            <li>Local variables</li>
+                            <li>Saved RBP (points to A's frame base)</li>
+                            <li>Saved registers</li>
+                        </ul>
+                    </div>
+
+                    <!-- Return Address B -->
+                    <div class="return-address">
+                        Return address to A
+                    </div>
+
+                    <!-- Function C Frame -->
+                    <div class="stack-frame">
+                        <div class="frame-title">
+                            Stack Frame for func C
+                        </div>
+                        <ul class="frame-content">
+                            <li>Local variables</li>
+                            <li>Saved RBP (points to B's frame base)</li>
+                            <li>Saved registers</li>
+                        </ul>
+                    </div>
+
+                    <!-- Return Address C -->
+                    <div class="return-address">
+                        Return address to B
+                    </div>
+
+                    <!-- Function D Frame -->
+                    <div class="stack-frame" style="position: relative;">
+                        <div class="pointer-indicator" style="top: 20px;">
+                            <span class="pointer-label rbp-pointer">RBP</span>
+                            <span class="arrow">→</span>
+                        </div>
+                        <div class="frame-title">
+                            Stack Frame for func D
+                            <span class="frame-badge" style="background: #10b981;">Current</span>
+                        </div>
+                        <ul class="frame-content">
+                            <li>Parameters (if passed on stack)</li>
+                            <li>Local variables</li>
+                            <li>Saved RBP (points to C's frame base)</li>
+                            <li>Saved registers</li>
+                        </ul>
+                    </div>
+
+                    <div style="position: relative;">
+                        <div class="pointer-indicator" style="top: 10px;">
+                            <span class="pointer-label rsp-pointer">RSP</span>
+                            <span class="arrow">→</span>
+                        </div>
+                        <div class="growth-indicator">
+                            <span>Stack grows downward</span>
+                            <span class="growth-arrow">↓</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="memory-label" style="margin-top: 10px;">← Low Memory Addresses</div>
+            </div>
+
+            <div class="info-panel">
+                <div class="info-title">Stack Details</div>
+
+                <div class="info-section">
+                    <h3>Stack Pointers</h3>
+                    <p><strong style="color: #ef4444;">RSP (Stack Pointer):</strong> Points to the top of the stack (current position)</p>
+                    <p style="margin-top: 8px;"><strong style="color: #10b981;">RBP (Base Pointer):</strong> Points to the base of the current stack frame</p>
+                </div>
+
+                <div class="info-section">
+                    <h3>Growth Direction</h3>
+                    <p>The stack grows <strong>downward</strong> toward lower memory addresses. Each function call pushes a new frame onto the stack.</p>
+                </div>
+
+                <div class="info-section">
+                    <h3>Stack Frame Contents</h3>
+                    <p>Each frame contains:</p>
+                    <ul style="margin-top: 8px; padding-left: 20px; color: #cbd5e0;">
+                        <li>Function parameters (if on stack)</li>
+                        <li>Return address</li>
+                        <li>Saved base pointer</li>
+                        <li>Local variables</li>
+                        <li>Saved registers</li>
+                    </ul>
+                </div>
+
+                <div class="call-sequence">
+                    <div class="call-sequence-title">Call Sequence</div>
+                    <div class="call-chain">
+                        <div class="call-step">
+                            <span>A calls B</span>
+                            <span class="call-step-arrow">→</span>
+                        </div>
+                        <div class="call-step">
+                            <span>B calls C</span>
+                            <span class="call-step-arrow">→</span>
+                        </div>
+                        <div class="call-step">
+                            <span>C calls D</span>
+                            <span class="call-step-arrow">→</span>
+                        </div>
+                        <div class="call-step">
+                            <strong style="color: #10b981;">D is currently executing</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="legend">
+                    <div class="legend-title">Legend</div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%); border: 2px solid #4a5568;"></div>
+                        <span>Stack Frame</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: linear-gradient(135deg, #1e293b 0%, #334155 100%); border: 2px solid #475569;"></div>
+                        <span>Return Address</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444;"></div>
+                        <span style="color: #ef4444;">RSP (Stack Pointer)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981;"></div>
+                        <span style="color: #10b981;">RBP (Base Pointer)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

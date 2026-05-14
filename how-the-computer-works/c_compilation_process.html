@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How C Compiling Works</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            color: #e0e0e0;
+            padding: 40px 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: #ffffff;
+            margin-bottom: 15px;
+            font-size: 2.8em;
+            text-shadow: 2px 2px 8px rgba(0,0,0,0.5);
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #b0b0b0;
+            margin-bottom: 50px;
+            font-size: 1.1em;
+        }
+
+        .pipeline-container {
+            display: flex;
+            gap: 30px;
+            align-items: stretch;
+            margin-bottom: 40px;
+        }
+
+        .compilation-flow {
+            flex: 1;
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(10px);
+            border: 3px solid #475569;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+        }
+
+        .flow-wrapper {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .stage {
+            flex: 1;
+            min-width: 180px;
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            border: 2px solid #475569;
+            border-radius: 12px;
+            padding: 25px 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .stage:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 8px 30px rgba(100, 165, 255, 0.5);
+            border-color: #60a5fa;
+        }
+
+        .stage.active {
+            transform: translateY(-8px);
+            border-color: #60a5fa;
+            box-shadow: 0 8px 30px rgba(100, 165, 255, 0.5);
+            background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+        }
+
+        .stage-title {
+            font-size: 1.3em;
+            font-weight: 600;
+            color: #ffffff;
+            margin-bottom: 15px;
+        }
+
+        .stage-input, .stage-output {
+            font-size: 0.85em;
+            color: #94a3b8;
+            margin: 5px 0;
+            font-family: 'Courier New', monospace;
+        }
+
+        .stage-input {
+            color: #fbbf24;
+        }
+
+        .stage-output {
+            color: #34d399;
+        }
+
+        .arrow {
+            font-size: 2.5em;
+            color: #60a5fa;
+            flex-shrink: 0;
+            animation: slideRight 1.5s infinite;
+        }
+
+        @keyframes slideRight {
+            0%, 100% { transform: translateX(0); opacity: 0.6; }
+            50% { transform: translateX(5px); opacity: 1; }
+        }
+
+        .info-panel {
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(10px);
+            border: 2px solid #475569;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+        }
+
+        .info-title {
+            font-size: 1.5em;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #475569;
+        }
+
+        .info-content {
+            display: none;
+        }
+
+        .info-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .default-info {
+            text-align: center;
+            color: #94a3b8;
+            padding: 40px 20px;
+            font-style: italic;
+        }
+
+        .default-info-icon {
+            font-size: 3em;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+
+        .info-section h3 {
+            color: #60a5fa;
+            font-size: 1.2em;
+            margin-bottom: 12px;
+            margin-top: 20px;
+        }
+
+        .info-section h3:first-child {
+            margin-top: 0;
+        }
+
+        .info-section p {
+            color: #cbd5e0;
+            font-size: 0.95em;
+            line-height: 1.7;
+            margin-bottom: 12px;
+        }
+
+        .info-section ul {
+            color: #cbd5e0;
+            font-size: 0.95em;
+            line-height: 1.7;
+            padding-left: 25px;
+        }
+
+        .info-section li {
+            margin-bottom: 8px;
+        }
+
+        .info-section code {
+            background: rgba(100, 165, 250, 0.15);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            color: #60a5fa;
+            font-size: 0.9em;
+        }
+
+        .code-block {
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid #475569;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #cbd5e0;
+            overflow-x: auto;
+        }
+
+        .code-block pre {
+            margin: 0;
+        }
+
+        .highlight-box {
+            background: rgba(100, 165, 250, 0.1);
+            border-left: 3px solid #60a5fa;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+        }
+
+        .file-type {
+            display: inline-block;
+            background: rgba(251, 191, 36, 0.2);
+            color: #fbbf24;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            font-family: 'Courier New', monospace;
+            margin: 0 3px;
+        }
+
+        @media (max-width: 1200px) {
+            .flow-wrapper {
+                flex-direction: column;
+            }
+
+            .arrow {
+                transform: rotate(90deg);
+            }
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2em;
+            }
+
+            .stage {
+                min-width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>How C Compiling Works</h1>
+        <p class="subtitle">Click on each stage to learn more about the compilation process</p>
+
+        <div class="pipeline-container">
+            <div class="compilation-flow">
+                <div class="flow-wrapper">
+                    <!-- Preprocessor Stage -->
+                    <div class="stage" data-stage="preprocessor">
+                        <div class="stage-title">Preprocessor</div>
+                        <div class="stage-input">→ .c files</div>
+                        <div class="stage-output">→ .i files</div>
+                    </div>
+
+                    <div class="arrow">→</div>
+
+                    <!-- Compiler Stage -->
+                    <div class="stage" data-stage="compiler">
+                        <div class="stage-title">Compiler</div>
+                        <div class="stage-input">→ .i files</div>
+                        <div class="stage-output">→ .asm files</div>
+                    </div>
+
+                    <div class="arrow">→</div>
+
+                    <!-- Assembler Stage -->
+                    <div class="stage" data-stage="assembler">
+                        <div class="stage-title">Assembler</div>
+                        <div class="stage-input">→ .asm files</div>
+                        <div class="stage-output">→ .o files</div>
+                    </div>
+
+                    <div class="arrow">→</div>
+
+                    <!-- Linker Stage -->
+                    <div class="stage" data-stage="linker">
+                        <div class="stage-title">Linker</div>
+                        <div class="stage-input">→ .o files<br>→ .so files (libraries)</div>
+                        <div class="stage-output">→ .exe file</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="info-panel">
+            <div class="info-title">Stage Details</div>
+
+            <!-- Default view -->
+            <div class="info-content active" id="default-info">
+                <div class="default-info">
+                    <div class="default-info-icon">🔍</div>
+                    <p>Click on any compilation stage to see detailed information</p>
+                </div>
+            </div>
+
+            <!-- Preprocessor Info -->
+            <div class="info-content" id="preprocessor-info">
+                <div class="info-section">
+                    <h3>What is the Preprocessor?</h3>
+                    <p>The preprocessor is the first stage of compilation. It processes all preprocessor directives (lines starting with <code>#</code>) before actual compilation begins.</p>
+
+                    <h3>Input & Output</h3>
+                    <p><strong>Input:</strong> <span class="file-type">.c</span> (C source files)</p>
+                    <p><strong>Output:</strong> <span class="file-type">.i</span> (Preprocessed source files)</p>
+
+                    <h3>What Does It Do?</h3>
+                    <ul>
+                        <li><strong>Removes comments:</strong> All <code>/* */</code> and <code>//</code> comments are stripped out</li>
+                        <li><strong>Includes header files:</strong> Replaces <code>#include</code> directives with actual file contents</li>
+                        <li><strong>Expands macros:</strong> Replaces all <code>#define</code> macros with their values</li>
+                        <li><strong>Conditional compilation:</strong> Processes <code>#ifdef</code>, <code>#ifndef</code>, <code>#if</code>, etc.</li>
+                    </ul>
+
+                    <h3>Example</h3>
+                    <div class="code-block">
+<pre>// Before preprocessing (hello.c)
+#include &lt;stdio.h&gt;
+#define PI 3.14159
+
+int main() {
+    printf("Pi is %f\n", PI);
+    return 0;
+}
+
+// After preprocessing (hello.i)
+// ... (entire stdio.h contents inserted here) ...
+
+int main() {
+    printf("Pi is %f\n", 3.14159);
+    return 0;
+}</pre>
+                    </div>
+
+                    <h3>Run Manually</h3>
+                    <div class="highlight-box">
+                        <p><code>gcc -E source.c -o source.i</code></p>
+                        <p style="font-size: 0.9em; margin-top: 8px;">The <code>-E</code> flag stops after preprocessing</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Compiler Info -->
+            <div class="info-content" id="compiler-info">
+                <div class="info-section">
+                    <h3>What is the Compiler?</h3>
+                    <p>The compiler (proper) translates preprocessed C code into assembly language. This is where the actual compilation happens.</p>
+
+                    <h3>Input & Output</h3>
+                    <p><strong>Input:</strong> <span class="file-type">.i</span> (Preprocessed source)</p>
+                    <p><strong>Output:</strong> <span class="file-type">.s</span> or <span class="file-type">.asm</span> (Assembly code)</p>
+
+                    <h3>What Does It Do?</h3>
+                    <ul>
+                        <li><strong>Lexical analysis:</strong> Breaks code into tokens (keywords, identifiers, operators)</li>
+                        <li><strong>Syntax analysis:</strong> Checks if code follows C grammar rules</li>
+                        <li><strong>Semantic analysis:</strong> Type checking, variable declarations, etc.</li>
+                        <li><strong>Optimization:</strong> Improves code efficiency (various levels: -O0, -O1, -O2, -O3)</li>
+                        <li><strong>Code generation:</strong> Generates assembly code for target architecture</li>
+                    </ul>
+
+                    <h3>Example</h3>
+                    <div class="code-block">
+<pre>// C code (from .i file)
+int add(int a, int b) {
+    return a + b;
+}
+
+// Generated assembly code (.s file)
+add:
+    push    rbp
+    mov     rbp, rsp
+    mov     DWORD PTR [rbp-4], edi
+    mov     DWORD PTR [rbp-8], esi
+    mov     edx, DWORD PTR [rbp-4]
+    mov     eax, DWORD PTR [rbp-8]
+    add     eax, edx
+    pop     rbp
+    ret</pre>
+                    </div>
+
+                    <h3>Run Manually</h3>
+                    <div class="highlight-box">
+                        <p><code>gcc -S source.i -o source.s</code></p>
+                        <p style="font-size: 0.9em; margin-top: 8px;">The <code>-S</code> flag stops after compilation (generates assembly)</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Assembler Info -->
+            <div class="info-content" id="assembler-info">
+                <div class="info-section">
+                    <h3>What is the Assembler?</h3>
+                    <p>The assembler converts human-readable assembly language into machine code (binary) that the processor can execute.</p>
+
+                    <h3>Input & Output</h3>
+                    <p><strong>Input:</strong> <span class="file-type">.s</span> or <span class="file-type">.asm</span> (Assembly code)</p>
+                    <p><strong>Output:</strong> <span class="file-type">.o</span> (Object files - binary machine code)</p>
+
+                    <h3>What Does It Do?</h3>
+                    <ul>
+                        <li><strong>Translates mnemonics:</strong> Converts assembly instructions (like <code>mov</code>, <code>add</code>) to binary opcodes</li>
+                        <li><strong>Resolves symbols:</strong> Creates symbol table for functions and variables</li>
+                        <li><strong>Generates relocatable code:</strong> Code that can be placed anywhere in memory</li>
+                        <li><strong>Creates object file:</strong> Binary file with machine code, but not yet executable</li>
+                    </ul>
+
+                    <h3>Object File Contents</h3>
+                    <div class="highlight-box">
+                        <p>An <code>.o</code> file contains:</p>
+                        <ul>
+                            <li>Machine code instructions</li>
+                            <li>Symbol table (function/variable names and addresses)</li>
+                            <li>Relocation information</li>
+                            <li>Debug information (if compiled with <code>-g</code>)</li>
+                        </ul>
+                    </div>
+
+                    <h3>Example</h3>
+                    <div class="code-block">
+<pre>// Assembly (.s file)
+mov eax, 5
+
+// Machine code (.o file) - hexadecimal representation
+B8 05 00 00 00</pre>
+                    </div>
+
+                    <h3>Run Manually</h3>
+                    <div class="highlight-box">
+                        <p><code>gcc -c source.s -o source.o</code></p>
+                        <p><code>as source.s -o source.o</code> (using GNU assembler directly)</p>
+                        <p style="font-size: 0.9em; margin-top: 8px;">The <code>-c</code> flag compiles without linking</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Linker Info -->
+            <div class="info-content" id="linker-info">
+                <div class="info-section">
+                    <h3>What is the Linker?</h3>
+                    <p>The linker is the final stage. It combines multiple object files and libraries into a single executable file.</p>
+
+                    <h3>Input & Output</h3>
+                    <p><strong>Input:</strong> <span class="file-type">.o</span> (Object files) + <span class="file-type">.so</span> / <span class="file-type">.a</span> (Libraries)</p>
+                    <p><strong>Output:</strong> <span class="file-type">.exe</span> (Windows) or executable (Linux/Mac)</p>
+
+                    <h3>What Does It Do?</h3>
+                    <ul>
+                        <li><strong>Resolves symbols:</strong> Connects function calls to their definitions across multiple files</li>
+                        <li><strong>Combines object files:</strong> Merges all <code>.o</code> files into one executable</li>
+                        <li><strong>Links libraries:</strong> Includes code from standard library (libc) and other libraries</li>
+                        <li><strong>Assigns addresses:</strong> Determines final memory addresses for all code and data</li>
+                        <li><strong>Creates executable:</strong> Produces final runnable program</li>
+                    </ul>
+
+                    <h3>Types of Linking</h3>
+                    <div class="highlight-box">
+                        <p><strong>Static Linking:</strong> Library code is copied into the executable (larger file, no external dependencies)</p>
+                        <p><strong>Dynamic Linking:</strong> Executable references external shared libraries (smaller file, requires <code>.so</code> or <code>.dll</code> files at runtime)</p>
+                    </div>
+
+                    <h3>Example</h3>
+                    <div class="code-block">
+<pre>// You have two files:
+// main.o - contains main() function, calls add()
+// math.o - contains add() function definition
+
+// Linker combines them and resolves:
+// "Where is add()?" → "It's in math.o at address 0x1234"
+
+// Result: Single executable with both functions</pre>
+                    </div>
+
+                    <h3>Run Manually</h3>
+                    <div class="highlight-box">
+                        <p><code>gcc main.o math.o -o program</code></p>
+                        <p><code>ld main.o math.o -o program</code> (using GNU linker directly)</p>
+                    </div>
+
+                    <h3>Common Linker Errors</h3>
+                    <ul>
+                        <li><strong>Undefined reference:</strong> Function called but never defined</li>
+                        <li><strong>Multiple definition:</strong> Same function defined in multiple files</li>
+                        <li><strong>Library not found:</strong> Missing <code>-l</code> flag for required library</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Interactive functionality
+        const stages = document.querySelectorAll('.stage');
+        const infoContents = document.querySelectorAll('.info-content');
+
+        stages.forEach(stage => {
+            stage.addEventListener('click', function() {
+                const stageName = this.getAttribute('data-stage');
+                
+                // Remove active class from all stages
+                stages.forEach(s => s.classList.remove('active'));
+                
+                // Add active class to clicked stage
+                this.classList.add('active');
+                
+                // Hide all info contents
+                infoContents.forEach(info => info.classList.remove('active'));
+                
+                // Show corresponding info
+                const targetInfo = document.getElementById(stageName + '-info');
+                if (targetInfo) {
+                    targetInfo.classList.add('active');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

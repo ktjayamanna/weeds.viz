@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Process Memory Layout</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            color: #e0e0e0;
+            padding: 40px 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: #ffffff;
+            margin-bottom: 15px;
+            font-size: 2.8em;
+            text-shadow: 2px 2px 8px rgba(0,0,0,0.5);
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #b0b0b0;
+            margin-bottom: 50px;
+            font-size: 1.1em;
+        }
+
+        .layout-container {
+            display: flex;
+            gap: 50px;
+            align-items: stretch;
+        }
+
+        .memory-visualization {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .address-label {
+            text-align: center;
+            font-weight: 600;
+            color: #94a3b8;
+            margin-bottom: 15px;
+            font-size: 0.95em;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .memory-container {
+            border: 3px solid #64748b;
+            border-radius: 16px;
+            padding: 30px;
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+            flex: 1;
+        }
+
+        .memory-section {
+            border: 2px solid #475569;
+            border-radius: 10px;
+            margin-bottom: 0;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .memory-section:hover {
+            transform: translateX(10px);
+            box-shadow: 0 5px 25px rgba(100, 165, 255, 0.4);
+            border-color: #60a5fa;
+        }
+
+        .memory-section.active {
+            transform: translateX(10px);
+            border-color: #60a5fa;
+            box-shadow: 0 5px 25px rgba(100, 165, 255, 0.4);
+        }
+
+        .section-header {
+            padding: 20px 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: linear-gradient(135deg, var(--section-color) 0%, var(--section-color-dark) 100%);
+        }
+
+        .section-name {
+            font-size: 1.3em;
+            font-weight: 600;
+            color: #ffffff;
+        }
+
+        .section-growth {
+            font-size: 0.85em;
+            color: #cbd5e0;
+            font-style: italic;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .growth-arrow {
+            font-size: 1.2em;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Color schemes for each section */
+        .stack-section {
+            --section-color: #8b5cf6;
+            --section-color-dark: #7c3aed;
+        }
+
+        .heap-section {
+            --section-color: #ec4899;
+            --section-color-dark: #db2777;
+        }
+
+        .bss-section {
+            --section-color: #f59e0b;
+            --section-color-dark: #d97706;
+        }
+
+        .data-section {
+            --section-color: #10b981;
+            --section-color-dark: #059669;
+        }
+
+        .rodata-section {
+            --section-color: #3b82f6;
+            --section-color-dark: #2563eb;
+        }
+
+        .text-section {
+            --section-color: #ef4444;
+            --section-color-dark: #dc2626;
+        }
+
+        .info-panel {
+            flex: 0 0 450px;
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(10px);
+            border: 2px solid #475569;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+            max-height: 800px;
+            overflow-y: auto;
+        }
+
+        .info-title {
+            font-size: 1.5em;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #475569;
+        }
+
+        .info-content {
+            display: none;
+        }
+
+        .info-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .info-section h3 {
+            color: #60a5fa;
+            font-size: 1.1em;
+            margin-bottom: 12px;
+            margin-top: 20px;
+        }
+
+        .info-section h3:first-child {
+            margin-top: 0;
+        }
+
+        .info-section p {
+            color: #cbd5e0;
+            font-size: 0.95em;
+            line-height: 1.7;
+            margin-bottom: 12px;
+        }
+
+        .info-section ul {
+            color: #cbd5e0;
+            font-size: 0.95em;
+            line-height: 1.7;
+            padding-left: 25px;
+        }
+
+        .info-section li {
+            margin-bottom: 8px;
+        }
+
+        .info-section code {
+            background: rgba(100, 165, 250, 0.15);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            color: #60a5fa;
+            font-size: 0.9em;
+        }
+
+        .highlight-box {
+            background: rgba(100, 165, 250, 0.1);
+            border-left: 3px solid #60a5fa;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+        }
+
+        .default-info {
+            text-align: center;
+            color: #94a3b8;
+            padding: 40px 20px;
+            font-style: italic;
+        }
+
+        .default-info-icon {
+            font-size: 3em;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+
+        /* Scrollbar styling */
+        .info-panel::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .info-panel::-webkit-scrollbar-track {
+            background: rgba(71, 85, 105, 0.3);
+            border-radius: 4px;
+        }
+
+        .info-panel::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+
+        .info-panel::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+
+        @media (max-width: 1024px) {
+            .layout-container {
+                flex-direction: column;
+            }
+
+            .info-panel {
+                flex: 1;
+                max-height: none;
+            }
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2em;
+            }
+
+            .section-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Memory Layout of a Process</h1>
+        <p class="subtitle">Click on each section to learn more</p>
+
+        <div class="layout-container">
+            <div class="memory-visualization">
+                <div class="address-label">← HIGH MEMORY ADDRESS</div>
+                
+                <div class="memory-container">
+                    <!-- Stack Section -->
+                    <div class="memory-section stack-section" data-section="stack">
+                        <div class="section-header">
+                            <div class="section-name">Stack</div>
+                            <div class="section-growth">
+                                <span>(grows down)</span>
+                                <span class="growth-arrow">↓</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Heap Section -->
+                    <div class="memory-section heap-section" data-section="heap">
+                        <div class="section-header">
+                            <div class="section-name">Heap</div>
+                            <div class="section-growth">
+                                <span>(grows up)</span>
+                                <span class="growth-arrow">↑</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- BSS Section -->
+                    <div class="memory-section bss-section" data-section="bss">
+                        <div class="section-header">
+                            <div class="section-name">BSS</div>
+                            <div class="section-growth"></div>
+                        </div>
+                    </div>
+
+                    <!-- Data Section -->
+                    <div class="memory-section data-section" data-section="data">
+                        <div class="section-header">
+                            <div class="section-name">Data</div>
+                            <div class="section-growth"></div>
+                        </div>
+                    </div>
+
+                    <!-- Read Only Data Section -->
+                    <div class="memory-section rodata-section" data-section="rodata">
+                        <div class="section-header">
+                            <div class="section-name">Read Only Data</div>
+                            <div class="section-growth"></div>
+                        </div>
+                    </div>
+
+                    <!-- Text/Code Section -->
+                    <div class="memory-section text-section" data-section="text">
+                        <div class="section-header">
+                            <div class="section-name">Text / Code</div>
+                            <div class="section-growth"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="address-label" style="margin-top: 15px;">← LOW MEMORY ADDRESS</div>
+            </div>
+
+            <div class="info-panel">
+                <div class="info-title">Section Details</div>
+
+                <!-- Default view -->
+                <div class="info-content active" id="default-info">
+                    <div class="default-info">
+                        <div class="default-info-icon">🖱️</div>
+                        <p>Click on any memory section to see detailed information</p>
+                    </div>
+                </div>
+
+                <!-- Stack Info -->
+                <div class="info-content" id="stack-info">
+                    <div class="info-section">
+                        <h3>What is the Stack?</h3>
+                        <p>The stack is a LIFO (Last In, First Out) data structure used for:</p>
+                        <ul>
+                            <li>Local variables</li>
+                            <li>Function call frames</li>
+                            <li>Function parameters</li>
+                            <li>Return addresses</li>
+                            <li>Saved register values</li>
+                        </ul>
+
+                        <h3>Growth Direction</h3>
+                        <p>The stack grows <strong>downward</strong> toward lower memory addresses. Each function call pushes a new frame onto the stack.</p>
+
+                        <h3>Per-Thread Allocation</h3>
+                        <div class="highlight-box">
+                            <p><strong>Important:</strong> Each thread gets its own stack (typically ~8MB). The stack shown is specific to the main thread. Other threads get ~8MB of stacks carved out from heap and other areas.</p>
+                        </div>
+
+                        <h3>Size</h3>
+                        <p>Typical stack size: <code>8MB</code> per thread (Linux default)</p>
+                        <p>Can be changed with <code>ulimit -s</code> or <code>pthread_attr_setstacksize()</code></p>
+                    </div>
+                </div>
+
+                <!-- Heap Info -->
+                <div class="info-content" id="heap-info">
+                    <div class="info-section">
+                        <h3>What is the Heap?</h3>
+                        <p>The heap is used for dynamic memory allocation at runtime:</p>
+                        <ul>
+                            <li>Memory allocated with <code>malloc()</code>, <code>calloc()</code>, <code>realloc()</code></li>
+                            <li>Python objects (when using CPython)</li>
+                            <li>C++ objects created with <code>new</code></li>
+                            <li>Memory that needs to persist beyond function scope</li>
+                        </ul>
+
+                        <h3>Growth Direction</h3>
+                        <p>The heap grows <strong>upward</strong> toward higher memory addresses.</p>
+
+                        <h3>Shared Across Threads</h3>
+                        <div class="highlight-box">
+                            <p><strong>Important:</strong> Unlike the stack, the heap is shared among all threads in a process. This is why you need synchronization (mutexes, locks) when multiple threads access heap memory.</p>
+                        </div>
+
+                        <h3>Management</h3>
+                        <p>Memory must be manually freed with <code>free()</code> or <code>delete</code>, or it's handled by garbage collectors in languages like Python, Java, etc.</p>
+
+                        <h3>Size</h3>
+                        <p>The heap can grow dynamically (limited by system memory and virtual address space).</p>
+                    </div>
+                </div>
+
+                <!-- BSS Info -->
+                <div class="info-content" id="bss-info">
+                    <div class="info-section">
+                        <h3>What is BSS?</h3>
+                        <p><strong>BSS</strong> stands for "Block Started by Symbol"</p>
+                        <p>This section contains uninitialized global and static variables.</p>
+
+                        <h3>Contents</h3>
+                        <ul>
+                            <li>Uninitialized global variables</li>
+                            <li>Uninitialized static variables</li>
+                            <li>Variables explicitly initialized to zero</li>
+                        </ul>
+
+                        <h3>Example</h3>
+                        <div class="highlight-box">
+                            <p><code>int global_var;</code> // Goes in BSS</p>
+                            <p><code>static int counter;</code> // Goes in BSS</p>
+                            <p><code>int zero_var = 0;</code> // Also goes in BSS</p>
+                        </div>
+
+                        <h3>Why Separate from Data?</h3>
+                        <p>All BSS variables are initialized to zero by the OS. By keeping them separate, the executable file doesn't need to store all those zeros, saving disk space.</p>
+                    </div>
+                </div>
+
+                <!-- Data Info -->
+                <div class="info-content" id="data-info">
+                    <div class="info-section">
+                        <h3>What is the Data Section?</h3>
+                        <p>This section contains initialized global and static variables.</p>
+
+                        <h3>Contents</h3>
+                        <ul>
+                            <li>Initialized global variables</li>
+                            <li>Initialized static variables (both local and global)</li>
+                            <li>Any global/static data with non-zero initial values</li>
+                        </ul>
+
+                        <h3>Example</h3>
+                        <div class="highlight-box">
+                            <p><code>int global_var = 42;</code> // Goes in Data</p>
+                            <p><code>static int counter = 100;</code> // Goes in Data</p>
+                            <p><code>char* msg = "hello";</code> // Pointer in Data, string in Read-Only Data</p>
+                        </div>
+
+                        <h3>Writable</h3>
+                        <p>Unlike the Read-Only Data section, this section is writable. Values can be modified at runtime.</p>
+
+                        <h3>Stored in Executable</h3>
+                        <p>Initial values are stored in the executable file and loaded into memory when the program starts.</p>
+                    </div>
+                </div>
+
+                <!-- Read Only Data Info -->
+                <div class="info-content" id="rodata-info">
+                    <div class="info-section">
+                        <h3>What is Read-Only Data?</h3>
+                        <p>This section contains constant data that should never be modified.</p>
+
+                        <h3>Contents</h3>
+                        <ul>
+                            <li>String literals (e.g., <code>"Hello, World!"</code>)</li>
+                            <li>Constant global variables (<code>const</code> in C/C++)</li>
+                            <li>Numeric constants</li>
+                            <li>Jump tables for switch statements</li>
+                        </ul>
+
+                        <h3>Example</h3>
+                        <div class="highlight-box">
+                            <p><code>const char* str = "Hello";</code> // "Hello" in Read-Only Data</p>
+                            <p><code>const int PI = 3.14159;</code> // PI in Read-Only Data</p>
+                        </div>
+
+                        <h3>Memory Protection</h3>
+                        <p>This section is marked as read-only by the OS. Attempting to modify it will cause a segmentation fault (crash).</p>
+
+                        <h3>Security Benefit</h3>
+                        <p>Making this section read-only prevents certain types of exploits where attackers try to modify program constants.</p>
+                    </div>
+                </div>
+
+                <!-- Text/Code Info -->
+                <div class="info-content" id="text-info">
+                    <div class="info-section">
+                        <h3>What is the Text Section?</h3>
+                        <p>This section contains the executable machine code of your program.</p>
+
+                        <h3>Contents</h3>
+                        <ul>
+                            <li>Compiled machine instructions</li>
+                            <li>All function code (your code + library code)</li>
+                            <li>Python bytecode (in CPython's case)</li>
+                            <li>Executable instructions that the CPU runs</li>
+                        </ul>
+
+                        <h3>Example</h3>
+                        <div class="highlight-box">
+                            <p>Your C function:</p>
+                            <p><code>int add(int a, int b) { return a + b; }</code></p>
+                            <p>Gets compiled to machine code stored here.</p>
+                        </div>
+
+                        <h3>Read-Only and Executable</h3>
+                        <p>This section is marked as <strong>read-only</strong> and <strong>executable</strong>. You can't modify code at runtime (security feature).</p>
+
+                        <h3>Shared Across Processes</h3>
+                        <p>Multiple instances of the same program can share the same Text section in memory (code doesn't change).</p>
+
+                        <h3>Size</h3>
+                        <p>Fixed at compile time. Determined by the size of your compiled code and linked libraries.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Interactive functionality
+        const sections = document.querySelectorAll('.memory-section');
+        const infoContents = document.querySelectorAll('.info-content');
+
+        sections.forEach(section => {
+            section.addEventListener('click', function() {
+                const sectionName = this.getAttribute('data-section');
+                
+                // Remove active class from all sections
+                sections.forEach(s => s.classList.remove('active'));
+                
+                // Add active class to clicked section
+                this.classList.add('active');
+                
+                // Hide all info contents
+                infoContents.forEach(info => info.classList.remove('active'));
+                
+                // Show corresponding info
+                const targetInfo = document.getElementById(sectionName + '-info');
+                if (targetInfo) {
+                    targetInfo.classList.add('active');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
